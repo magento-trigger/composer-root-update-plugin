@@ -61,6 +61,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
     public function testOverrideOriginalRoot()
     {
         $this->composer->expects($this->never())->method('getLocker');
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
 
         $retriever = new RootPackageRetriever(
             $this->console,
@@ -78,6 +79,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testOriginalRootFromLocker()
     {
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
         $this->composer->expects($this->once())->method('getLocker');
 
         $retriever = new RootPackageRetriever($this->console, $this->composer, 'enterprise', '2.0.0');
@@ -89,7 +91,14 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetOriginalRootFromRepo()
     {
-        $this->repo->method('whatProvides')->willReturn(['1.1.0.0' => $this->originalRoot, '2.0.0.0' => $this->targetRoot]);
+        $this->repo->method('loadPackages')->willReturn(
+            [
+                'namesFound' => [$this->originalRoot->getName()],
+                'packages' => [
+                    spl_object_hash($this->originalRoot) => $this->originalRoot
+                ]
+            ]
+        );
 
         $retriever = new RootPackageRetriever($this->console, $this->composer, 'enterprise', '2.0.0');
         $retrievedOriginal = $retriever->getOriginalRootPackage(false);
@@ -99,6 +108,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetOriginalRootNotOnRepo_Override()
     {
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
         $this->repo->method('whatProvides')->willReturn(['2.0.0.0' => $this->targetRoot]);
 
         $retriever = new RootPackageRetriever($this->console, $this->composer, 'enterprise', '2.0.0');
@@ -109,7 +119,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetOriginalRootNotOnRepo_NoOverride()
     {
-        $this->repo->method('whatProvides')->willReturn(['2.0.0.0' => $this->targetRoot]);
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
 
         $retriever = new RootPackageRetriever($this->console, $this->composer, 'enterprise', '2.0.0');
         $retrievedOriginal = $retriever->getOriginalRootPackage(false);
@@ -119,7 +129,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetOriginalRootNotOnRepo_Confirm()
     {
-        $this->repo->method('whatProvides')->willReturn(['2.0.0.0' => $this->targetRoot]);
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
         $this->console->setInteractive(true);
         $this->io->method('isInteractive')->willReturn(true);
         $this->io->method('askConfirmation')->willReturn(true);
@@ -132,7 +142,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetOriginalRootNotOnRepo_NoConfirm()
     {
-        $this->repo->method('whatProvides')->willReturn(['2.0.0.0' => $this->targetRoot]);
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
         $this->console->setInteractive(true);
         $this->io->method('isInteractive')->willReturn(true);
         $this->io->method('askConfirmation')->willReturn(false);
@@ -145,8 +155,13 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetTargetRootFromRepo()
     {
-        $this->repo->method('whatProvides')->willReturn(
-            ['1.1.0.0' => $this->originalRoot, '2.0.0.0' => $this->targetRoot]
+        $this->repo->expects($this->any())->method('loadPackages')->willReturn(
+            [
+                'namesFound' => [$this->originalRoot->getName()],
+                'packages' => [
+                    spl_object_hash($this->targetRoot) => $this->targetRoot
+                ]
+            ]
         );
 
         $retriever = new RootPackageRetriever($this->console, $this->composer, 'enterprise', '2.0.0');
@@ -157,8 +172,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetTargetRootNotOnRepo()
     {
-        $this->repo->method('whatProvides')->willReturn(['1.1.0.0' => $this->originalRoot]);
-
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
         $retriever = new RootPackageRetriever($this->console, $this->composer, 'enterprise', '2.0.0');
         $retrievedTarget = $retriever->getTargetRootPackage();
 
@@ -167,6 +181,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
 
     public function testGetUserRoot()
     {
+        $this->repo->method('loadPackages')->willReturn(['namesFound' => [], 'packages'=>[]]);
         $retriever = new RootPackageRetriever($this->console, $this->composer, 'enterprise', '2.0.0');
         $retrievedTarget = $retriever->getUserRootPackage();
 
@@ -222,11 +237,7 @@ class RootPackageRetrieverTest extends UpdatePluginTestCase
         $this->targetRoot->method('getStabilityPriority')->willReturn(0);
 
         $repoManager = $this->createPartialMock(RepositoryManager::class, ['getRepositories']);
-        $this->repo = $this->createPartialMock(ComposerRepository::class, ['hasProviders', 'whatProvides', 'loadRootServerFile']);
-        $this->repo->method('hasProviders')->willReturn(true);
-        $this->mockProtectedProperty($this->repo, 'rfs', $this->createPartialMock(RemoteFilesystem::class, []));
-        $this->repo->method('loadRootServerFile')->willReturn(true);
-
+        $this->repo = $this->createPartialMock(ComposerRepository::class, ['hasProviders', 'whatProvides', 'loadRootServerFile', 'loadPackages']);
         $repoManager->method('getRepositories')->willReturn([$this->repo]);
         $this->composer->method('getRepositoryManager')->willReturn($repoManager);
     }

@@ -7,6 +7,7 @@
 namespace Magento\ComposerRootUpdatePlugin\Setup;
 
 use Composer\Composer;
+use Composer\DependencyResolver\Operation\InstallOperation;
 use Composer\Downloader\FilesystemException;
 use Composer\Factory;
 use Composer\Installer;
@@ -52,26 +53,26 @@ class WebSetupWizardPluginInstaller
      */
     public function packageEvent($event)
     {
-        $jobs = $event->getRequest()->getJobs();
+
         $packageName = PluginDefinition::PACKAGE_NAME;
-        foreach ($jobs as $job) {
-            if (key_exists('packageName', $job) && $job['packageName'] === $packageName) {
-                $pkg = $event->getInstalledRepo()->findPackage($packageName, '*');
-                if ($pkg !== null) {
-                    $version = $pkg->getPrettyVersion();
-                    try {
-                        $composer = $event->getComposer();
-                        $this->updateSetupWizardPlugin(
-                            $composer,
-                            $composer->getConfig()->getConfigSource()->getName(),
-                            $version
-                        );
-                    } catch (Exception $e) {
-                        $this->console->error("Web Setup Wizard installation of \"$packageName: $version\" failed", $e);
-                    }
-                    break;
-                }
-            }
+        $operation = $event->getOperation();
+        if (!$operation instanceof InstallOperation) {
+            return;
+        }
+        $pkg = $operation->getPackage();
+        if ($operation->getPackage()->getName() !== $packageName) {
+            return;
+        }
+        $version = $pkg->getPrettyVersion();
+        try {
+            $composer = $event->getComposer();
+            $this->updateSetupWizardPlugin(
+                $composer,
+                $composer->getConfig()->getConfigSource()->getName(),
+                $version
+            );
+        } catch (Exception $e) {
+            $this->console->error("Web Setup Wizard installation of \"$packageName: $version\" failed", $e);
         }
     }
 

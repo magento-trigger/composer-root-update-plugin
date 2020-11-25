@@ -8,6 +8,7 @@ namespace Magento\ComposerRootUpdatePlugin\Updater;
 
 use Composer\Composer;
 use Composer\DependencyResolver\Pool;
+use Composer\DependencyResolver\PoolBuilder;
 use Composer\IO\IOInterface;
 use Composer\Package\BasePackage;
 use Composer\Package\PackageInterface;
@@ -15,9 +16,11 @@ use Composer\Package\RootPackageInterface;
 use Composer\Package\Version\VersionParser;
 use Composer\Package\Version\VersionSelector;
 use Composer\Repository\CompositeRepository;
+use Composer\Repository\RepositorySet;
 use Magento\ComposerRootUpdatePlugin\ComposerReimplementation\AccessibleRootPackageLoader;
 use Magento\ComposerRootUpdatePlugin\Utils\PackageUtils;
 use Magento\ComposerRootUpdatePlugin\Utils\Console;
+use phpDocumentor\Reflection\Types\Array_;
 
 /**
  * Contains methods to retrieve composer Package objects for the relevant Magento project root packages
@@ -249,24 +252,20 @@ class RootPackageRetriever
     ) {
         $packageName = strtolower("magento/project-$edition-edition");
         $parsedConstraint = (new VersionParser())->parseConstraints($constraint);
+        $rootPkg = $this->composer->getPackage();
 
-        $minStability = $this->composer->getPackage()->getMinimumStability();
+        $minStability = $rootPkg->getMinimumStability();
         if (!$minStability) {
             $minStability = 'stable';
         }
-        $rootPackageLoader = new AccessibleRootPackageLoader();
-        $stabilityFlags = $rootPackageLoader->extractStabilityFlags($packageName, $constraint, $minStability);
+        $stabilityFlags = $rootPkg->getStabilityFlags() ?? [];
         $stability = key_exists($packageName, $stabilityFlags)
             ? array_search($stabilityFlags[$packageName], BasePackage::$stabilities)
             : $minStability;
         $this->console->comment("Minimum stability for \"$packageName: $constraint\": $stability", IOInterface::DEBUG);
 
-        $pool = new Pool(
-            $stability,
-            $stabilityFlags,
-            [$packageName => $parsedConstraint]
-        );
-        $pool->addRepository(new CompositeRepository($this->composer->getRepositoryManager()->getRepositories()));
+        $repositorySet = new RepositorySet($minStability, $stabilityFlags);
+        $repositorySet->addRepository(new CompositeRepository($this->composer->getRepositoryManager()->getRepositories()));
 
         if (!$this->pkgUtils->isConstraintStrict($constraint)) {
             $this->console->warning(
@@ -278,10 +277,9 @@ class RootPackageRetriever
 
         $phpVersion = $ignorePlatformReqs ? null : $phpVersion;
 
-        $result = (new VersionSelector($pool))->findBestCandidate(
+        $result = (new VersionSelector($repositorySet))->findBestCandidate(
             $packageName,
             $constraint,
-            $phpVersion,
             $preferredStability
         );
 
